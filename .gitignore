@@ -1,0 +1,38 @@
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.toc
+*.synctex.gz
+*.synctex(busy)
+*.pdfsync
+*.nav
+*.snm
+*.vrb
+
+# Minted/Pygments (Generados por el paquete minted de código)
+_minted-*/
+*.pygstyle
+*.pygtex
+
+# BibTeX / Biber fallos temporales
+*-blx.bib
+*-blx.aux
+*.bbl-SAVE-ERROR
+*.bcf-SAVE-ERROR
+
+# Editores / temporales de TeX
+*.xdv
+*~
+*.swp
+
+# Asegurarse de NO ignorar los PDFs generados
+!*.pdf

@@ -1,0 +1,132 @@
+% =========================================================================
+% Taller Señales y Sistemas II - Punto 2: Diseño de Filtros
+% =========================================================================
+
+clear; clc; close all;
+
+%% Parámetros 
+Fs = 75000;
+Ts = 1/Fs;
+
+% Frecuencias de los símbolos (Hz)
+f1 = 10700; 
+f2 = 11900; 
+f3 = 13100; 
+f4 = 14300; 
+
+% Frecuencias en rad/s
+w1 = 2*pi*f1; 
+w2 = 2*pi*f2; 
+w3 = 2*pi*f3; 
+w4 = 2*pi*f4;
+
+Rp = 3;  % Atenuación en la banda de paso (frecuencia de corte a 3dB)
+As = 15; % Atenuación en la banda de rechazo de 15dB
+
+%% 3. Calcular las medias geométricas para las frecuencias de corte
+% Frecuencias de corte analógicas (rad/s)
+wc12 = 2*pi*sqrt(f1 * f2); % Entre 10.7k y 11.9k
+wc23 = 2*pi*sqrt(f2 * f3); % Entre 11.9k y 13.1k
+wc34 = 2*pi*sqrt(f3 * f4); % Entre 13.1k y 14.3k
+
+%% 2. Calcular el orden con cheb1ord
+% Filtro 1: Pasabajos (Tono 10.7 kHz)
+% La atenuación de 15dB es en la frecuencia del último símbolo (14.3 kHz)
+[n_lp, Wn_lp] = cheb1ord(wc12, w4, Rp, As, 's');
+
+% Filtro 2: Pasabanda 1 (Tono 11.9 kHz)
+% Atenuación en tono anterior (10.7 kHz) y siguiente (13.1 kHz)
+[n_bp1, Wn_bp1] = cheb1ord([wc12, wc23], [w1, w3], Rp, As, 's');
+
+% Filtro 3: Pasabanda 2 (Tono 13.1 kHz)
+% Atenuación en tono anterior (11.9 kHz) y siguiente (14.3 kHz)
+[n_bp2, Wn_bp2] = cheb1ord([wc23, wc34], [w2, w4], Rp, As, 's');
+
+% Filtro 4: Pasaaltos (Tono 14.3 kHz)
+% La atenuación de 15dB es en la frecuencia del primer símbolo (10.7 kHz)
+[n_hp, Wn_hp] = cheb1ord(wc34, w1, Rp, As, 's');
+
+% Reglas del taller: "Usar el mayor valor" para agrupar los órdenes
+orden_bp = max(n_bp1, n_bp2);
+orden_lh = max(n_lp, n_hp);
+
+fprintf('Órdenes Calculados Analógicos:\n');
+fprintf('Orden Pasabajos y Pasaaltos (Unificado): %d\n', orden_lh);
+fprintf('Orden Pasabandas (Unificado): %d\n\n', orden_bp);
+
+%% 4. Hacer el filtro con cheby1 y extraer Funciones de Transferencia
+[b_lp, a_lp]   = cheby1(orden_lh, Rp, Wn_lp, 'low', 's');
+[b_bp1, a_bp1] = cheby1(orden_bp, Rp, Wn_bp1, 'bandpass', 's');
+[b_bp2, a_bp2] = cheby1(orden_bp, Rp, Wn_bp2, 'bandpass', 's');
+[b_hp, a_hp]   = cheby1(orden_lh, Rp, Wn_hp, 'high', 's');
+
+% Crear objetos tf (Funciones de Transferencia) para mostrar e interactuar
+H_lp  = tf(b_lp, a_lp);
+H_bp1 = tf(b_bp1, a_bp1);
+H_bp2 = tf(b_bp2, a_bp2);
+H_hp  = tf(b_hp, a_hp);
+
+disp('Función de Transferencia - Pasabajos:'); H_lp
+disp('Función de Transferencia - Pasabanda 1:'); H_bp1
+disp('Función de Transferencia - Pasabanda 2:'); H_bp2
+disp('Función de Transferencia - Pasaaltos:'); H_hp
+
+%% Gráficas: Polos y Diagramas de Bode Analógicos
+figure('Name', 'Diagrama de Polos y Ceros Analógicos');
+subplot(2,2,1); pzmap(H_lp); title('Polos Pasabajos');
+subplot(2,2,2); pzmap(H_bp1); title('Polos Pasabanda 1');
+subplot(2,2,3); pzmap(H_bp2); title('Polos Pasabanda 2');
+subplot(2,2,4); pzmap(H_hp); title('Polos Pasaaltos');
+
+figure('Name', 'Bode Filtros Analógicos');
+bode(H_lp, H_bp1, H_bp2, H_hp);
+grid on;
+legend('Pasabajos (10.7kHz)', 'Pasabanda 1 (11.9kHz)', 'Pasabanda 2 (13.1kHz)', 'Pasaaltos (14.3kHz)');
+title('Respuesta en Frecuencia - Filtros Analógicos Chebyshev I');
+
+%% Conversiones a Digitales (IIR)
+
+% --- A. Transformación Bilineal ---
+% Se usa la función 'bilinear' de MATLAB
+[bz_lp_bil, az_lp_bil]   = bilinear(b_lp, a_lp, Fs);
+[bz_bp1_bil, az_bp1_bil] = bilinear(b_bp1, a_bp1, Fs);
+[bz_bp2_bil, az_bp2_bil] = bilinear(b_bp2, a_bp2, Fs);
+[bz_hp_bil, az_hp_bil]   = bilinear(b_hp, a_hp, Fs);
+
+% --- B. Invarianza del Impulso ---
+% El taller exige reemplazar el pasaaltos por un 3er pasabanda debido al aliasing
+% Para esto, crearemos un pasabanda que abarque el símbolo superior (14.3kHz)
+% fijando el corte superior por ejemplo en 15.5kHz para cerrarlo antes de Nyquist
+w_corte_sup = 2*pi*15500;
+w_rechazo_sup = 2*pi*16500;
+
+[n_bp3, Wn_bp3] = cheb1ord([wc34, w_corte_sup], [w3, w_rechazo_sup], Rp, As, 's');
+[b_bp3_ana, a_bp3_ana] = cheby1(n_bp3, Rp, Wn_bp3, 'bandpass', 's');
+
+[bz_lp_imp, az_lp_imp]   = impinvar(b_lp, a_lp, Fs);
+[bz_bp1_imp, az_bp1_imp] = impinvar(b_bp1, a_bp1, Fs);
+[bz_bp2_imp, az_bp2_imp] = impinvar(b_bp2, a_bp2, Fs);
+[bz_bp3_imp, az_bp3_imp] = impinvar(b_bp3_ana, a_bp3_ana, Fs); % Reemplazo del pasaaltos
+
+% Mostrar espectros IIR en Diagramas de Bode Digitales
+H_lp_bil  = tf(bz_lp_bil, az_lp_bil, Ts);
+H_bp1_bil = tf(bz_bp1_bil, az_bp1_bil, Ts);
+H_bp2_bil = tf(bz_bp2_bil, az_bp2_bil, Ts);
+H_hp_bil  = tf(bz_hp_bil, az_hp_bil, Ts);
+
+figure('Name', 'Bode Filtros Digitales - Bilineal');
+bode(H_lp_bil, H_bp1_bil, H_bp2_bil, H_hp_bil);
+grid on;
+legend('Pasabajos', 'Pasabanda 1', 'Pasabanda 2', 'Pasaaltos');
+title('Respuesta IIR - Transformación Bilineal');
+
+H_lp_imp  = tf(bz_lp_imp, az_lp_imp, Ts);
+H_bp1_imp = tf(bz_bp1_imp, az_bp1_imp, Ts);
+H_bp2_imp = tf(bz_bp2_imp, az_bp2_imp, Ts);
+H_bp3_imp = tf(bz_bp3_imp, az_bp3_imp, Ts);
+
+figure('Name', 'Bode Filtros Digitales - Invarianza del Impulso');
+bode(H_lp_imp, H_bp1_imp, H_bp2_imp, H_bp3_imp);
+grid on;
+legend('Pasabajos', 'Pasabanda 1', 'Pasabanda 2', 'Pasabanda 3 (Pasaaltos adaptado)');
+title('Respuesta IIR - Invarianza del Impulso');
