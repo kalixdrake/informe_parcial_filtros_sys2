@@ -25,7 +25,7 @@
 % --------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[9pt,a4paper,twocolumn,twoside]{rho-class/rho}
+\documentclass[9pt,a4paper,oneside]{rho-class/rho}
 \usepackage[spanish,es-nodecimaldot,es-noindentfirst]{babel}
 
 %% Spanish babel recomendation
@@ -91,9 +91,39 @@
 
 %----------------------------------------------------------
 
-\section{Punto 1: Análisis Teórico}
+\section{Punto 1: Análisis Teórico y Códigos de MATLAB}
 
-    En este punto del taller se analizaron los requerimientos teóricos necesarios para el diseño del demodulador FSK según el estándar P25.
+    En este punto del taller se analizaron los requerimientos teóricos necesarios para el diseño del demodulador FSK según el estándar P25. El sistema utiliza modulación 4-FSK (Frequency Shift Keying de 4 niveles), donde la información se codifica en cuatro frecuencias distintas para la portadora. Según el estándar, estas frecuencias centrales están definidas como:
+    \begin{itemize}
+        \item Símbolo '+3': $f_1 = 10700$ Hz
+        \item Símbolo '+1': $f_2 = 11900$ Hz
+        \item Símbolo '-1': $f_3 = 13100$ Hz
+        \item Símbolo '-3': $f_4 = 14300$ Hz
+    \end{itemize}
+    La separación entre cada frecuencia adyacente es de $1200$ Hz, lo cual impone un reto de diseño, requiriendo filtros con bandas de transición relativamente angostas para evitar la interferencia entre símbolos (ISI) y el ruido de banda adyacente. Para cumplir con estas especificaciones y lograr aislar el símbolo correcto, se requieren cuatro filtros: un pasabajos (para $f_1$), dos pasabandas (para $f_2$ y $f_3$), y un pasaaltos (para $f_4$), con frecuencias de corte establecidas en los puntos intermedios entre las portadoras (aprox. $11300$ Hz, $12500$ Hz y $13700$ Hz).
+
+    \subsection{Implementación en MATLAB}
+
+    Para la comprobación y el modelado matemático del banco de filtros, el código en MATLAB define inicialmente las atenuaciones objetivo en las bandas pasa y de rechazo (\texttt{Rp = 1} dB, y \texttt{Rs = 15} dB). Posteriormente, debido a que la modulación puede poseer un ensanchamiento frecuencial pequeño, se establece un margen para las frecuencias de corte, utilizando:
+    
+    \begin{itemize}
+        \item \textbf{Filtro Pasabajos:} Diseñado con $f_p = 10.31$ kHz y $f_s = 11.56$ kHz. Su diseño se centró en retener la polaridad del símbolo $+3$.
+        \item \textbf{Filtros Pasabanda 1 y 2:} Diseñados estableciendo rangos de paso entre $10.92$ kHz $\approx 12.46$ kHz; y el segundo entre $12.46$ kHz $\approx 14.05$ kHz (ajustando para garantizar mínimas interferencias interbanda según el script).
+        \item \textbf{Filtro Pasaaltos:} Frecuencia de transición a partir del corte ideal $13.43$ kHz y banda de paso plenamente establecida en $14.68$ kHz para extraer el símbolo $-3$.
+    \end{itemize}
+
+    Se usa la función \texttt{cheb1ord} de la señal para calcular el orden prototipo analógico indispensable en todos los filtros, forzando un $N_{max}$ aplicable a todos de igual manera para uniformidad del sistema. Luego de obtener los coeficientes en el dominio de la variable $s$ usando la instrucción \texttt{cheby1(n, Rp, Wn, ... , 's')}, observamos individualmente las respuestas en frecuencia que confirman que la caída por década es lo bastante pronunciada:
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabajos_analogico.png}
+        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabanda_analogico.png} \\
+        \vskip 0.2cm
+        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabanda_analogico_2.png}
+        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasaaltos_analogico.png}
+        \caption{Arriba Izq: Filtro pasabajos y Arriba Der: Filtro pasabanda 1. Abajo Izq: Filtro pasabanda 2 y Abajo Der: Filtro pasaaltos.}
+        \label{fig:resultados_punto_uno}
+    \end{figure}
 
 \section{Punto 2: Diseño de Filtros}
 
@@ -139,7 +169,7 @@
 
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Bode analogicos.png}
+            \includegraphics[width=\columnwidth]{figures/Punto2/Bode analogicos.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros analógicos diseñados.}
             \label{fig:bode_analogico}
         \end{figure}
@@ -154,7 +184,7 @@
 
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Bode Digitales.png}
+            \includegraphics[width=\columnwidth]{figures/Punto2/Bode Digitales.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros digitales con Transformación Bilineal.}
             \label{fig:bode_bilineal}
         \end{figure}
@@ -165,7 +195,7 @@
         
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Bode Digitales Inviarianza.png}
+            \includegraphics[width=\columnwidth]{figures/Punto2/Bode Digitales Inviarianza.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros digitales con Invarianza del Impulso.}
             \label{fig:bode_invarianza}
         \end{figure}
@@ -173,5 +203,35 @@
     \subsection{Elección del Mejor Filtro}
     
     Analizando los métodos, se elige la \textbf{Transformación Bilineal} como el mejor acercamiento para este caso. La principal ventaja de esta transformación es evitar por completo el aliasing. Además, la invarianza del impulso no permite el diseño directo de filtros pasaaltos, lo que obligó a realizar aproximaciones y adaptar el último filtro. Para el demodulador FSK, donde preservar bien la separación frecuencial es crucial para la detección de símbolos, la transformación bilineal otorga un diseño más confiable y exacto en todo el rango requerido, a pesar del posible 'warping' de frecuencia, que en un rango estrecho no presenta impactos severos si se maneja correctamente.
+
+\section{Punto 3: Diseño de Filtros Digitales (FIR)}
+
+    Como alternativa a los filtros IIR y con el objetivo de garantizar una fase completamente lineal (retardo de grupo constante), se diseñó un banco de filtros de Respuesta al Impulso Finita (FIR). La linealidad en la fase es esencial para evitar la dispersión temporal y la distorsión asimétrica de los envolventes, fenómenos que pueden aumentar la interferencia entre símbolos (ISI).
+
+    Para el diseño, se utilizó el método de enventanado (Windowing), aplicando una ventana de Hamming. Esta ventana fue elegida por lograr un equilibrio óptimo entre el control de ondulación (ripples) gracias a una correcta atenuación de los lóbulos laterales y una banda de transición ajustada a los requerimientos.
+
+    Con una frecuencia de muestreo $f_s = 75$ kHz, las frecuencias de corte del Punto 1 (11.3 kHz, 12.5 kHz y 13.7 kHz) se normalizaron respecto a la frecuencia de Nyquist ($37500$ Hz). Luego de probar diferentes aproximaciones analíticas, se estableció un orden estándar $N=200$, el cual aporta la selectividad lo suficientemente abrupta exigida por la cercanía de las bandas del protocolo P25 (separación de 1.2 kHz) para aislar cada canal, dividiendo el espectro en los cuatro filtros requeridos (pasabajos, doble pasabanda, pasaaltos).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\columnwidth]{figures/Punto3/Filtros_FIR.png}
+        \caption{Respuesta combinada en frecuencia del banco de filtros FIR desarrollado.}
+        \label{fig:bode_fir}
+    \end{figure}
+
+\section{Punto 4: Demodulación y Detección}
+
+    En esta sección se integró el sistema de recepción del esquema FSK, sometiéndolo a las señales de prueba suministradas en la práctica (\texttt{Prueba01} y \texttt{Prueba10}). El banco de filtros actúa separando la modulación multiplexada y la señal que porta el mensaje pasa casi inalterada solo a través de uno de los filtros en su segmento de tiempo específico.
+    
+    El proceso de detección se completó operando a la salida de cada filtro un detector de envolvente (o cálculo de magnitud de la señal analítica) y realizando una comparación para extraer la máxima amplitud entre las ramas simultáneamente, determinando así cuál tono (frecuencia) estaba transmitiendo el transmisor, y en segundo lugar codificando esta frecuencia a su símbolo del estándar (+3, +1, -1, -3).
+    
+    Se corroboró satisfactoriamente que las tres topologías (Analógica, IIR vía Transformada Bilineal y FIR) cumplen su cometido discriminatorio. Sin embargo, para fines de robustez en sistemas digitales de alta velocidad como un DSP, el filtro FIR (que mitiga el ringing indeseado del factor de fase alineal del IIR) comprobó ser el modelo más fidedigno en la práctica a costa de un mayor costo computacional (mayor orden).
+    
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\columnwidth]{figures/Punto4/Prueba01_FIR.png}
+        \caption{Demodulación de envolventes tras el banco de filtros FIR para el conjunto de prueba Prueba01.}
+        \label{fig:prueba_01_fir}
+    \end{figure}
 
 \end{document}
