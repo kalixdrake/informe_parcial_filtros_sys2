@@ -100,11 +100,25 @@
         \item Símbolo '-1': $f_3 = 13100$ Hz
         \item Símbolo '-3': $f_4 = 14300$ Hz
     \end{itemize}
-    La separación entre cada frecuencia adyacente es de $1200$ Hz, lo cual impone un reto de diseño, requiriendo filtros con bandas de transición relativamente angostas para evitar la interferencia entre símbolos (ISI) y el ruido de banda adyacente. Para cumplir con estas especificaciones y lograr aislar el símbolo correcto, se requieren cuatro filtros: un pasabajos (para $f_1$), dos pasabandas (para $f_2$ y $f_3$), y un pasaaltos (para $f_4$), con frecuencias de corte establecidas en los puntos intermedios entre las portadoras (aprox. $11300$ Hz, $12500$ Hz y $13700$ Hz).
+    La separación entre cada frecuencia adyacente es estricta, limitándose a apenas $1200$ Hz. Esto impone un reto de diseño crítico, requiriendo filtros con bandas de transición sumamente angostas y alta ortogonalidad para mitigar agresivamente el ruido de banda adyacente e impedir la diafonía o interferencia entre símbolos (ISI). Para cumplir con estas demandas topológicas y aislar el símbolo adecuado con alta pureza espectral, se sintetizan en paralelo cuatro filtros selectivos: un filtro pasabajos (dedicado a retener unicamente $f_1$), un par de filtros pasabandas de alta Q (para capturar por separado $f_2$ y $f_3$), y finalmente un filtro pasaaltos (asignado al canal $f_4$). Las frecuencias perimetrales de corte se proyectan sobre los ejes intermedios de los lóbulos de portadora (aproximadamente en $11300$ Hz, $12500$ Hz y $13700$ Hz), logrando rechazar de forma tajante el contenido espurio fuera del intervalo de interés.
 
-    \subsection{Implementación en MATLAB}
+    \subsection{Implementación matemática y diseño en MATLAB}
 
-    Para la comprobación y el modelado matemático del banco de filtros, el código en MATLAB define inicialmente las atenuaciones objetivo en las bandas pasa y de rechazo (\texttt{Rp = 1} dB, y \texttt{Rs = 15} dB). Posteriormente, debido a que la modulación puede poseer un ensanchamiento frecuencial pequeño, se establece un margen para las frecuencias de corte, utilizando:
+    Para la comprobación y el modelado matemático del banco de filtros, el código en MATLAB define inicialmente las atenuaciones objetivo en las bandas pasa y de rechazo (\texttt{Rp = 1} dB, y \texttt{Rs = 15} dB). Adicionalmente, se obtienen las características de la señal a analizar:
+
+\begin{minted}[linenos,fontsize=\small]{matlab}
+Rp = 1;
+Rs = 15;
+
+Fs = 75000;
+t = (0:length(Out)-1)/Fs;
+
+N = length(Out);
+f = (0:N-1)*Fs/N;
+X = fft(Out);
+\end{minted}
+
+    Posteriormente, debido a que la modulación puede poseer un ensanchamiento frecuencial pequeño, se establece un margen para las frecuencias de corte, utilizando:
     
     \begin{itemize}
         \item \textbf{Filtro Pasabajos:} Diseñado con $f_p = 10.31$ kHz y $f_s = 11.56$ kHz. Su diseño se centró en retener la polaridad del símbolo $+3$.
@@ -112,15 +126,27 @@
         \item \textbf{Filtro Pasaaltos:} Frecuencia de transición a partir del corte ideal $13.43$ kHz y banda de paso plenamente establecida en $14.68$ kHz para extraer el símbolo $-3$.
     \end{itemize}
 
-    Se usa la función \texttt{cheb1ord} de la señal para calcular el orden prototipo analógico indispensable en todos los filtros, forzando un $N_{max}$ aplicable a todos de igual manera para uniformidad del sistema. Luego de obtener los coeficientes en el dominio de la variable $s$ usando la instrucción \texttt{cheby1(n, Rp, Wn, ... , 's')}, observamos individualmente las respuestas en frecuencia que confirman que la caída por década es lo bastante pronunciada:
+    Se usa la función \texttt{cheb1ord} de la señal para calcular el orden prototipo analógico indispensable en todos los filtros, forzando un $N_{max}$ aplicable a todos de igual manera para uniformidad del sistema. Luego de obtener los coeficientes en el dominio de la variable $s$ usando la instrucción \texttt{cheby1(n, Rp, Wn, ... , 's')}:
+
+\begin{minted}[linenos,fontsize=\small]{matlab}
+nPB = max(n2,n3); % mismo orden para pasabanda
+nEXT = max(n1,n4); % mismo orden para extremos
+
+[b1,a1] = cheby1(nEXT,Rp,Wn1,'low','s');
+[b2,a2] = cheby1(nPB,Rp,Wn2,'bandpass','s');
+[b3,a3] = cheby1(nPB,Rp,Wn3,'bandpass','s');
+[b4,a4] = cheby1(nEXT,Rp,Wn4,'high','s');
+\end{minted}
+
+    Observamos individualmente las respuestas en frecuencia que confirman que la caída por década es lo bastante pronunciada:
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabajos_analogico.png}
-        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabanda_analogico.png} \\
+        \includegraphics[width=0.42\columnwidth]{figures/Punto1/pasabajos_analogico.png}
+        \includegraphics[width=0.42\columnwidth]{figures/Punto1/pasabanda_analogico.png} \\
         \vskip 0.2cm
-        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasabanda_analogico_2.png}
-        \includegraphics[width=0.48\columnwidth]{figures/Punto1/pasaaltos_analogico.png}
+        \includegraphics[width=0.42\columnwidth]{figures/Punto1/pasabanda_analogico_2.png}
+        \includegraphics[width=0.42\columnwidth]{figures/Punto1/pasaaltos_analogico.png}
         \caption{Arriba Izq: Filtro pasabajos y Arriba Der: Filtro pasabanda 1. Abajo Izq: Filtro pasabanda 2 y Abajo Der: Filtro pasaaltos.}
         \label{fig:resultados_punto_uno}
     \end{figure}
@@ -129,7 +155,7 @@
 
     \subsection{Filtros Analógicos}
 
-        Para la primera etapa, se diseñaron filtros analógicos usando la aproximación de Chebyshev Tipo I, dado que se requiere una transición más pronunciada. Las frecuencias centrales de los símbolos son:
+        Para la primera iteración de esta etapa, se diseñaron y calcularon los prototipos analógicos basándonos exclusivamente en la familia de filtros de Chebyshev Tipo I. Esta aproximación matemática no fue seleccionada por azar; a diferencia del filtro Butterworth, cuya atenuación es demasiado progresiva para nuestras bandas cercanas, o del filtro de Bessel, que introduce grandes variaciones de fase y ondulación tanto en bandas de paso como de rechazo, el diseño Chebyshev Tipo I concentra un nivel permisible de rizado (\textit{ripple}) paramétrico en la banda pasante pero, a cambio, nos reporta una caída de transición exponencial y escarpada hacia la banda atenuada. Esta selectividad es la piedra angular para lograr delimitar canales con un espaciado de $1.2$ kHz eficientemente y previene que el decodificador confunda frecuencias adyacentes por error. Las frecuencias centrales asignadas a los símbolos son:
         \begin{itemize}
             \item $ f_1 = 10700$ Hz
             \item $ f_2 = 11900$ Hz
@@ -169,7 +195,7 @@
 
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Punto2/Bode analogicos.png}
+            \includegraphics[width=0.75\columnwidth]{figures/Punto2/Bode analogicos.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros analógicos diseñados.}
             \label{fig:bode_analogico}
         \end{figure}
@@ -180,22 +206,29 @@
 
         \textbf{Transformación Bilineal}
         
-        La transformación bilineal es un método algebraico que aproxima la integración continua a través de la regla del trapecio. Esto evita el aliasing o solapamiento propio de otras transformaciones. Se usó la función nativa de MATLAB para mapear el dominio $ al dominio $.
+        La transformación bilineal consta de un procedimiento algebraico de mapeo de planos mediante el cual se proyecta el semiplano izquierdo del dominio $s$ (continuo) directamente en el interior del círculo unitario del dominio $z$ (discreto). Esta sustitución corresponde fundamentalmente a evaluar la integral en tiempo continuo aproximando su área subyacente mediante diferencias trapezoidales (Regla del Trapecio). Su mayor proeza técnica reside en que mapea el eje imaginario entero en una sola revolución dentro del círculo unitario, esquivando de forma radical el solapamiento en frecuencia (Aliasing) inherente a otros métodos. No obstante, por su naturaleza no lineal, esto desata una pequeña deformación asintótica en las frecuencias más altas de la gráfica, fenómeno popularmente conocido como alabeo o \textit{frequency warping}; un problema que mitigamos internamente si se le aplica un cuidadoso factor de pre-warping sobre las frecuencias deseadas. Se usó la función nativa de MATLAB para mapear el dominio $s$ al dominio $z$.
+
+\begin{minted}[linenos,fontsize=\small]{matlab}
+[bz_lp, az_lp]     = bilinear(b_lp_a, a_lp_a, Fs);
+[bz_bp1, az_bp1]   = bilinear(b_bp1_a, a_bp1_a, Fs);
+[bz_bp2, az_bp2]   = bilinear(b_bp2_a, a_bp2_a, Fs);
+[bz_hp, az_hp]     = bilinear(b_hp_a, a_hp_a, Fs);
+\end{minted}
 
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Punto2/Bode Digitales.png}
+            \includegraphics[width=0.75\columnwidth]{figures/Punto2/Bode Digitales.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros digitales con Transformación Bilineal.}
             \label{fig:bode_bilineal}
         \end{figure}
 
         \textbf{Invarianza del Impulso}
         
-        La invarianza de impulso preserva la forma de la respuesta al impulso en el tiempo, pero puede generar aliasing, por lo que no es apta para filtros pasaaltos o rechaza banda. Dado que el último filtro analógico es un pasaaltos, para aplicarle esta técnica fue necesario adaptarlo como un pasabanda de altas frecuencias limitadas.
+        Como método en contraste, se implementó la Invarianza del Impulso, cuya premisa teórica radica en obtener un filtro digital que replique, muestra por muestra de forma calcada, la respuesta al impulso temporal del componente analógico original. Dada su naturaleza puramente muestreada $h(nT)$, adolece de forma flagrante ante la repetición periódica de espectros por el teorema de Nyquist, lo que incurre en aliasing sustancial si la banda a discretizar no se ha confinado de forma estricta a un rango cerrado base. Esto dictamina un postulado empírico clave: este procedimiento resulta inherentemente fallido ante requerimientos Pasaaltos o de Rechaza banda al abarcar infinitas frecuencias en lo continuo. Por ello, dado que la envolvente de la frecuencia $f_4$ nos exigió modelar un componente pasaaltos, nos vimos forzados mediante métodos numéricos o aproximaciones heurísticas a reacomodarlo simulando transitoriamente ser un filtro pasabanda sumamente ancho, para posibilitar medianamente su estabilización convergente durante los cálculos.
         
         \begin{figure}[H]
             \centering
-            \includegraphics[width=\columnwidth]{figures/Punto2/Bode Digitales Inviarianza.png}
+            \includegraphics[width=0.75\columnwidth]{figures/Punto2/Bode Digitales Inviarianza.png}
             \caption{Respuesta en frecuencia (Bode) de los filtros digitales con Invarianza del Impulso.}
             \label{fig:bode_invarianza}
         \end{figure}
@@ -206,30 +239,54 @@
 
 \section{Punto 3: Diseño de Filtros Digitales (FIR)}
 
-    Como alternativa a los filtros IIR y con el objetivo de garantizar una fase completamente lineal (retardo de grupo constante), se diseñó un banco de filtros de Respuesta al Impulso Finita (FIR). La linealidad en la fase es esencial para evitar la dispersión temporal y la distorsión asimétrica de los envolventes, fenómenos que pueden aumentar la interferencia entre símbolos (ISI).
+    Debido a que las topologías de Respuesta Infinita (IIR) conllevan obligatoriamente a dependencias retroalimentadas que estiran y distorsionan de forma no-lineal el espectro de fase, consideramos imperativo desarrollar paralelamente un segundo enfoque, construyendo un banco digital de Respuesta al Impulso Finita (FIR). Las grandes virtudes del paradigma FIR se sustentan de forma unánime en que aseguran una configuración inherentemente estable libre de polos inestables (la función solo se proyecta en ceros) y en asegurar una fase calculable estrictamente lineal, lo cual matemáticamente se traduce en ostentar un \textit{retardo de grupo uniforme y constante} en cualquier banda pasante evaluada. Dicho retardo lineal garantiza una fidelidad total de la forma de la onda durante toda su travesía circuital, resultando crucial en flujos de datos y señales moduladas continuas donde las alteraciones asimétricas espurias dictarían un colapso en las lecturas de los decodificadores al disparar la Interferencia Entre Símbolos (ISI).
 
-    Para el diseño, se utilizó el método de enventanado (Windowing), aplicando una ventana de Hamming. Esta ventana fue elegida por lograr un equilibrio óptimo entre el control de ondulación (ripples) gracias a una correcta atenuación de los lóbulos laterales y una banda de transición ajustada a los requerimientos.
+    La metodología de diseño requerida involucró aplicar la conocida Técnica de Enventanado en Tiempo (\textit{Windowing Technique}). Al truncar simplemente de modo rectangular una respuesta ideal Sinc de alcance infinito, un pernicioso Fenómeno de Gibbs emana fluctuaciones y rizos severos no mitigables en los alrededores de cada corte limítrofe perimetral. En aras de silenciarlas y gobernar la transición, ponderamos los coeficientes empleando explícitamente una \textit{Ventana de Hamming}. La envolvente característica de Hamming modula progresivamente las amplitudes de las muestras laterales bajo un ensanchamiento liso de compana, entregando de este modo un atenuamiento de mitigación formidable sobre el primer y mayor lóbulo lateral (amortiguando ruidos cercanos hasta magnitudes de los robustos y admirables $-43$ dB), demostrando un espléndido equilibrio al conjugar la eliminación en los picos indeseados transitorios simultáneamente con mantener a flote bandas de rechazo de caídas muy profundas.
 
     Con una frecuencia de muestreo $f_s = 75$ kHz, las frecuencias de corte del Punto 1 (11.3 kHz, 12.5 kHz y 13.7 kHz) se normalizaron respecto a la frecuencia de Nyquist ($37500$ Hz). Luego de probar diferentes aproximaciones analíticas, se estableció un orden estándar $N=200$, el cual aporta la selectividad lo suficientemente abrupta exigida por la cercanía de las bandas del protocolo P25 (separación de 1.2 kHz) para aislar cada canal, dividiendo el espectro en los cuatro filtros requeridos (pasabajos, doble pasabanda, pasaaltos).
 
+\begin{minted}[linenos,fontsize=\small]{matlab}
+N = 200;           % orden del filtro
+% frecuencias de corte
+fc1 = 11300; fc2 = 12500; fc3 = 13700;
+% normalización
+W1 = fc1/(fs/2); W2 = fc2/(fs/2); W3 = fc3/(fs/2);
+
+% filtro pasabajos
+b1 = fir1(N,W1,'low',hamming(N+1));
+% filtro pasabanda
+b2 = fir1(N,[W1 W2],'bandpass',hamming(N+1));
+b3 = fir1(N,[W2 W3],'bandpass',hamming(N+1));
+% filtro pasaaltos
+b4 = fir1(N,W3,'high',hamming(N+1));
+\end{minted}
+
     \begin{figure}[H]
         \centering
-        \includegraphics[width=\columnwidth]{figures/Punto3/Filtros_FIR.png}
+        \includegraphics[width=0.75\columnwidth]{figures/Punto3/Filtros_FIR.png}
         \caption{Respuesta combinada en frecuencia del banco de filtros FIR desarrollado.}
         \label{fig:bode_fir}
     \end{figure}
 
 \section{Punto 4: Demodulación y Detección}
 
-    En esta sección se integró el sistema de recepción del esquema FSK, sometiéndolo a las señales de prueba suministradas en la práctica (\texttt{Prueba01} y \texttt{Prueba10}). El banco de filtros actúa separando la modulación multiplexada y la señal que porta el mensaje pasa casi inalterada solo a través de uno de los filtros en su segmento de tiempo específico.
+    En esta sección se integró a cabalidad el sistema de recepción del esquema FSK, sometiéndolo a las señales de prueba muestreadas y suministradas en la práctica con una frecuencia de $f_s = 75$ kHz (ejemplo evaluativo \texttt{Prueba01} y \texttt{Prueba10}). El banco de filtros actúa separando efectivamente la energía multiplexada de las modulaciones: la información que porta el mensaje atraviesa los umbrales casi inalterada solo a través de uno de los filtros por instante durante su segmento de tiempo único especificado.
     
-    El proceso de detección se completó operando a la salida de cada filtro un detector de envolvente (o cálculo de magnitud de la señal analítica) y realizando una comparación para extraer la máxima amplitud entre las ramas simultáneamente, determinando así cuál tono (frecuencia) estaba transmitiendo el transmisor, y en segundo lugar codificando esta frecuencia a su símbolo del estándar (+3, +1, -1, -3).
+    El núcleo algorítmico del proceso de detección se culminó al disponer arquitectónicamente y en paralelo un detector de envolvente en el puerto acoplado de salida de cada filtro (computando sistemáticamente la magnitud geométrica de la representación analítica del canal). Esto esencialmente rectifica la señal superior de entrada, desvelando su silueta atenuada global y proyectando directamente su magnitud instantánea. Apoyándonos sobre esquemas superpuestos comparadores temporizados, se evaluó en sincronía qué enrutamiento presentó la cresta de dominancia modal (máxima amplitud) de todo el conjunto al mismo tiempo. Al aislar esa mayoría comparativa, se dictamina certeramente cuál frecuencia dominante poseía el transmisor, y de allí se extrapola, de manera codificada preacordada, cómo esa portadora resuelta corresponde bit a bit hacia el símbolo equivalente exigido por el protocolo P25 ($+3, +1, -1, -3$).
     
-    Se corroboró satisfactoriamente que las tres topologías (Analógica, IIR vía Transformada Bilineal y FIR) cumplen su cometido discriminatorio. Sin embargo, para fines de robustez en sistemas digitales de alta velocidad como un DSP, el filtro FIR (que mitiga el ringing indeseado del factor de fase alineal del IIR) comprobó ser el modelo más fidedigno en la práctica a costa de un mayor costo computacional (mayor orden).
+    El simulador central concedió comprobar íntegramente cómo las tres topologías (Analógica, IIR vía Integración Bilineal y paradigma paramétrico FIR) logran de manera cabal su función fundamental y discriminatoria FSK. A la postre y como corolario vital para implementaciones duras: mientras un IIR de bajo orden induce un sutil entorpecimiento temporal no lineal oscilatorio "ringing" que distorsiona las fronteras por sus desfases relativos, la estructura FIR (disipadora de alinealidad a cambio de altos recursos de computación u órdenes superlativos de $N$) dictaminó en nuestra simulación poseer la rectitud más nítida concebible confirmando que sigue representando la élite como patrón de trabajo y la vía más pragmática del procesamiento en sistemas a gran escala como DSPs y redes modulares rápidas.
+    
+\begin{minted}[linenos,fontsize=\small]{matlab}
+% Filtrado de la señal FIR elegido
+y1 = filter(b_fir_lp, 1, x);
+y2 = filter(b_fir_bp1, 1, x);
+y3 = filter(b_fir_bp2, 1, x);
+y4 = filter(b_fir_hp, 1, x);
+\end{minted}
     
     \begin{figure}[H]
         \centering
-        \includegraphics[width=\columnwidth]{figures/Punto4/Prueba01_FIR.png}
+        \includegraphics[width=0.75\columnwidth]{figures/Punto4/Prueba01_FIR.png}
         \caption{Demodulación de envolventes tras el banco de filtros FIR para el conjunto de prueba Prueba01.}
         \label{fig:prueba_01_fir}
     \end{figure}
