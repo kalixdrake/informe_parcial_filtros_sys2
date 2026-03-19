@@ -193,6 +193,16 @@ nEXT = max(n1,n4); % mismo orden para extremos
 
         La respuesta en frecuencia y los diagramas de polos y ceros corroboran el diseño esperado para las especificaciones analógicas definidas.
 
+        \textbf{Implementación en Secciones de Menor Orden (Punto 5)}
+        
+        Debido a que el filtro pasabajos sintetizado presenta un orden general de 4, estructurarlo a con hardware como un único circuito con aproximación directa resultaría inestable frente a la tolerancia de los componentes físicos. De acuerdo con los parámetros de la función de transferencia obtenida, la implementación física del filtro analógico debe llevarse a cabo dividiendo $H_{lp}(s)$ en una conexión en \textbf{cascada de dos subsecciones de orden 2} (etapas bicuadráticas). 
+        
+        Al encontrar las raíces del denominador polinómico original, sus polos complejos conjugados se agrupan en pares para generar dos funciones de transferencia fundamentales del tipo:
+        \begin{equation}
+            H_i(s) = \frac{k_i}{s^2 + \frac{\omega_i}{Q_i} s + \omega_i^2}
+        \end{equation}
+        donde $H_{lp}(s) = H_1(s) \cdot H_2(s)$. Esta descomposición modular permite diseñar de forma independiente cada etapa utilizando topologías activas comunes y sólidas de segundo orden, como los circuitos Sallen-Key o la topología de Retroalimentación Múltiple (Multiple-Feedback).
+
         \begin{figure}[H]
             \centering
             \includegraphics[width=0.75\columnwidth]{figures/Punto2/Bode analogicos.png}
@@ -236,6 +246,16 @@ nEXT = max(n1,n4); % mismo orden para extremos
     \subsection{Elección del Mejor Filtro}
     
     Analizando los métodos, se elige la \textbf{Transformación Bilineal} como el mejor acercamiento para este caso. La principal ventaja de esta transformación es evitar por completo el aliasing. Además, la invarianza del impulso no permite el diseño directo de filtros pasaaltos, lo que obligó a realizar aproximaciones y adaptar el último filtro. Para el demodulador FSK, donde preservar bien la separación frecuencial es crucial para la detección de símbolos, la transformación bilineal otorga un diseño más confiable y exacto en todo el rango requerido, a pesar del posible 'warping' de frecuencia, que en un rango estrecho no presenta impactos severos si se maneja correctamente.
+
+    \textbf{Implementación en Secciones de Menor Orden (Punto 5)}
+    
+    Al igual que ocurre en el dominio analógico, una implementación directa (\textit{Direct Form}) en software o DSP de un filtro digital de orden alto como este (orden 4) resulta especialmente susceptible a inestabilidades derivadas de la cuantización computacional y al truncamiento finito de sus coeficientes. En la práctica, esto suele traducirse en la desviación perjudicial de sus polos hacia afuera del círculo unitario. 
+    
+    Por ello, para programar eficazmente el IIR, la rutina principal se divide obligatoriamente en \textbf{secciones de segundo orden en cascada (SOS - Biquads)}. Las fórmulas matriciales en MATLAB, operadas a través de \texttt{tf2sos()}, desglosan el gran polinomio transferencial $H(z)$ en pares de polos y ceros conjugados para conformar la serie:
+    \begin{equation}
+        H(z) = \prod_{k=1}^{2} \frac{b_{0k} + b_{1k} z^{-1} + b_{2k} z^{-2}}{1 + a_{1k} z^{-1} + a_{2k} z^{-2}}
+    \end{equation}
+    Garantizando una estructura computacional robusta que previene el desborde aritmético durante la filtración digital.
 
 \section{Punto 3: Diseño de Filtros Digitales (FIR)}
 
@@ -290,5 +310,146 @@ y4 = filter(b_fir_hp, 1, x);
         \caption{Demodulación de envolventes tras el banco de filtros FIR para el conjunto de prueba Prueba01.}
         \label{fig:prueba_01_fir}
     \end{figure}
+
+\section{Demodulación de la señal FSK}
+
+Una vez diseñado el banco de filtros, se procede a la demodulación de la
+señal FSK. El objetivo es identificar, para cada intervalo de tiempo,
+cuál de las frecuencias está presente y así recuperar la secuencia de
+bits transmitida.
+
+\subsection{Segmentación de la señal}
+
+La señal recibida se divide en segmentos de duración igual al símbolo.
+Dado que la duración del símbolo es
+
+\begin{equation}
+T_s = 10\;ms
+\end{equation}
+
+y la frecuencia de muestreo es
+
+\begin{equation}
+f_s = 75\;kHz
+\end{equation}
+
+el número de muestras por símbolo es
+
+\begin{equation}
+N = f_s \cdot T_s = 750
+\end{equation}
+
+Cada segmento de 750 muestras corresponde a un símbolo.
+
+\subsection{Filtrado mediante banco de filtros}
+
+Cada segmento de la señal es procesado a través del banco de filtros FIR
+diseñado previamente (pasabajos, dos pasabanda y pasaaltos). De esta
+forma se obtiene una salida por cada filtro, correspondiente a cada una
+de las posibles frecuencias del sistema FSK.
+
+\subsection{Cálculo de energía}
+
+Para determinar cuál frecuencia está presente en cada símbolo, se calcula
+la energía de la señal a la salida de cada filtro:
+
+\begin{equation}
+E_k = \sum_{n=0}^{N-1} |y_k[n]|^2
+\end{equation}
+
+donde $y_k[n]$ corresponde a la salida del $k$-ésimo filtro.
+
+La frecuencia detectada será aquella cuya energía sea máxima:
+
+\begin{equation}
+k = \arg\max(E_1, E_2, E_3, E_4)
+\end{equation}
+
+\subsection{Asignación de bits}
+
+Cada frecuencia detectada se asocia a un par de bits de acuerdo con la
+codificación del sistema:
+
+\begin{center}
+\begin{tabular}{|c|c|}
+\hline
+Frecuencia & Bits \\
+\hline
+$f_1$ & 11 \\
+$f_2$ & 10 \\
+$f_3$ & 00 \\
+$f_4$ & 01 \\
+\hline
+\end{tabular}
+\end{center}
+
+De esta manera, cada símbolo produce dos bits.
+
+\subsection{Reconstrucción del mensaje}
+
+La secuencia de bits obtenida se agrupa en bloques de 8 bits, los cuales
+se interpretan como caracteres ASCII.
+
+\begin{equation}
+\text{Carácter} = \text{ASCII}(\text{bits})
+\end{equation}
+
+Este proceso permite reconstruir el mensaje transmitido a partir de la
+señal FSK.
+
+\subsection{Implementación en MATLAB}
+
+El proceso completo se implementa mediante el siguiente código:
+
+\begin{verbatim}{matlab}
+Ns = length(x)/750;
+bits_total = [];
+
+for k = 1:Ns
+    
+    inicio = (k-1)*750 + 1;
+    fin = k*750;
+
+    segmento = x(inicio:fin);
+
+    y1 = filter(b1,1,segmento);
+    y2 = filter(b2,1,segmento);
+    y3 = filter(b3,1,segmento);
+    y4 = filter(b4,1,segmento);
+
+    E = [sum(y1.^2) sum(y2.^2) sum(y3.^2) sum(y4.^2)];
+
+    [~,idx] = max(E);
+
+    if idx == 1
+        bits = [1 1];
+    elseif idx == 2
+        bits = [1 0];
+    elseif idx == 3
+        bits = [0 0];
+    else
+        bits = [0 1];
+    end
+
+    bits_total = [bits_total bits];
+end
+
+% Conversión a ASCII
+mensaje = '';
+
+for k = 1:8:length(bits_total)
+    byte = bits_total(k:k+7);
+    num = bin2dec(num2str(byte));
+    mensaje = [mensaje char(num)];
+end
+
+disp(mensaje)
+\end{verbatim}
+
+\subsection{Resultados esperados}
+
+Al aplicar el procedimiento descrito, se obtiene como salida el mensaje
+original transmitido, demostrando así la correcta operación del sistema de
+demodulación FSK basado en un banco de filtros FIR.
 
 \end{document}

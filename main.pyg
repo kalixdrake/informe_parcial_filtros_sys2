@@ -1,0 +1,5 @@
+% Filtrado de la señal FIR elegido
+y1 = filter(b_fir_lp, 1, x);
+y2 = filter(b_fir_bp1, 1, x);
+y3 = filter(b_fir_bp2, 1, x);
+y4 = filter(b_fir_hp, 1, x);
